@@ -281,18 +281,47 @@ impl Reader for TomlReader {
     }
 }
 
+struct QueryReader {
+    file_path: String,
+    query: String,
+}
+
+impl Reader for QueryReader {
+    fn read(&self) -> String {
+        use std::fs;
+
+        // Read the file content
+        let content = fs::read_to_string(&self.file_path).unwrap_or_else(|e| {
+            panic!("Failed to read file {}: {}", self.file_path, e);
+        });
+
+        // Search for the query string
+        if let Some(_) = content.find(&self.query) {
+            // Return the query string itself
+            self.query.clone()
+        } else {
+            panic!(
+                "Query '{}' not found in file {}",
+                self.query, self.file_path
+            );
+        }
+    }
+}
+
 enum Accessor {
     Spans(SpanReader),
     Toml(TomlReader),
     Yaml(YamlReader),
+    Query(QueryReader),
 }
 
 impl Accessor {
     fn read(&self) -> String {
         match self {
-            Accessor::Spans(spans) => spans.read(),
-            Accessor::Toml(toml) => toml.read(),
-            Accessor::Yaml(yaml) => yaml.read(),
+            Accessor::Spans(reader) => reader.read(),
+            Accessor::Toml(reader) => reader.read(),
+            Accessor::Yaml(reader) => reader.read(),
+            Accessor::Query(reader) => reader.read(),
         }
     }
 }
@@ -315,6 +344,53 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_query_reader() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        // Create a temporary file
+        let file = NamedTempFile::new().unwrap();
+        let file_path = file.path().to_str().unwrap().to_string();
+
+        // Write some content to the file
+        let content = "This is a test file with some specific content to search for.\nIt has multiple lines and the needle we're looking for is somewhere in here.\nThe needle is 'specific content' which should be found by our query reader.";
+        fs::write(&file_path, content).unwrap();
+
+        // Test finding a query that exists
+        let query_reader = QueryReader {
+            file_path: file_path.clone(),
+            query: "specific content".to_string(),
+        };
+
+        assert_eq!(query_reader.read(), "specific content");
+
+        // Test that a non-existent query causes a panic
+        let non_existent_query = QueryReader {
+            file_path: file_path.clone(),
+            query: "this text doesn't exist".to_string(),
+        };
+
+        let result = std::panic::catch_unwind(|| non_existent_query.read());
+        assert!(result.is_err(), "Expected panic when query is not found");
+
+        // Test with a query at the beginning of the file
+        let beginning_query = QueryReader {
+            file_path: file_path.clone(),
+            query: "This is".to_string(),
+        };
+
+        assert_eq!(beginning_query.read(), "This is");
+
+        // Test with a query at the end of the file
+        let end_query = QueryReader {
+            file_path,
+            query: "query reader".to_string(),
+        };
+
+        assert_eq!(end_query.read(), "query reader");
+    }
     use std::fs;
 
     #[test]
@@ -1170,5 +1246,278 @@ scores = [10, 20, 30]
         );
 
         // Temporary files will be automatically cleaned up when they go out of scope
+    }
+
+    #[test]
+    fn test_linker_with_query() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        // Create temporary files
+        let content_file = NamedTempFile::new().unwrap();
+        let toml_file = NamedTempFile::new().unwrap();
+        let yaml_file = NamedTempFile::new().unwrap();
+
+        let content_path = content_file.path().to_str().unwrap().to_string();
+        let toml_path = toml_file.path().to_str().unwrap().to_string();
+        let yaml_path = yaml_file.path().to_str().unwrap().to_string();
+
+        // Create a file with some content to search in
+        let file_content =
+            String::from("This is a test file that contains some configuration values.\n")
+                + "The API key is abc123 and should be kept secret.\n"
+                + "The server host is localhost and the port is 8080.\n"
+                + "Debug mode is enabled (true).";
+
+        fs::write(&content_path, file_content).unwrap();
+
+        // Create a TOML file with matching values
+        let toml_content = r#"[config]
+api_key = "abc123"
+host = "localhost"
+port = 8080
+debug = true
+"#;
+
+        fs::write(&toml_path, toml_content).unwrap();
+
+        // Create a YAML file with matching values
+        let yaml_content =
+            "---\nconfig:\n  api_key: abc123\n  host: localhost\n  port: 8080\n  debug: true\n";
+
+        fs::write(&yaml_path, yaml_content).unwrap();
+
+        // Test 1: Compare query result with TOML value (matching)
+        let query_reader = QueryReader {
+            file_path: content_path.clone(),
+            query: "abc123".to_string(),
+        };
+
+        let toml_reader = TomlReader {
+            file_path: toml_path.clone(),
+            key_path: "config.api_key".to_string(),
+        };
+
+        let linker = Linker {
+            a: Accessor::Query(query_reader),
+            b: Accessor::Toml(toml_reader),
+        };
+
+        assert!(
+            linker.check(),
+            "Matching query and TOML value should compare equal"
+        );
+
+        // Test 2: Compare query result with YAML value (matching)
+        let query_reader = QueryReader {
+            file_path: content_path.clone(),
+            query: "localhost".to_string(),
+        };
+
+        let yaml_reader = YamlReader {
+            file_path: yaml_path.clone(),
+            key_path: "config.host".to_string(),
+        };
+
+        let linker = Linker {
+            a: Accessor::Query(query_reader),
+            b: Accessor::Yaml(yaml_reader),
+        };
+
+        assert!(
+            linker.check(),
+            "Matching query and YAML value should compare equal"
+        );
+
+        // Test 3: Compare query result with TOML value (non-matching)
+        let query_reader = QueryReader {
+            file_path: content_path,
+            query: "8080".to_string(),
+        };
+
+        let toml_reader = TomlReader {
+            file_path: toml_path,
+            key_path: "config.api_key".to_string(),
+        };
+
+        let linker = Linker {
+            a: Accessor::Query(query_reader),
+            b: Accessor::Toml(toml_reader),
+        };
+
+        assert!(
+            !linker.check(),
+            "Non-matching query and TOML value should not compare equal"
+        );
+
+        // Temporary files will be automatically cleaned up when they go out of scope
+    }
+
+    #[test]
+    fn test_linker_with_query_and_toml() {
+        use std::fs;
+        use tempfile::NamedTempFile;
+
+        // Create temporary files for the test
+        let text_file = NamedTempFile::new().unwrap();
+        let config_file = NamedTempFile::new().unwrap();
+
+        let text_path = text_file.path().to_str().unwrap().to_string();
+        let config_path = config_file.path().to_str().unwrap().to_string();
+
+        // Create a text file with various configuration values embedded in prose
+        let text_content = String::from(
+            "\
+# Project Configuration
+
+This document contains the configuration settings for our project.
+
+## API Settings
+
+The production API endpoint is https://api.example.com/v2 and should be used for all requests.
+For development, use http://localhost:3000 instead.
+
+## Database Settings
+
+Database connection string: postgresql://user:password@db.example.com:5432/mydb
+Max connections: 100
+Timeout: 30 seconds
+
+## Feature Flags
+
+- Enable caching: true
+- Debug mode: false
+- Beta features: true
+
+Last updated: 2025-05-01
+",
+        );
+
+        // Create a TOML configuration file with the same values
+        let config_content = r#"[api]
+production_url = "https://api.example.com/v2"
+development_url = "http://localhost:3000"
+
+[database]
+connection_string = "postgresql://user:password@db.example.com:5432/mydb"
+max_connections = 100
+timeout = 30
+
+[features]
+enable_caching = true
+debug_mode = false
+beta_features = true
+
+[metadata]
+last_updated = "2025-05-01"
+"#;
+
+        fs::write(&text_path, text_content).unwrap();
+        fs::write(&config_path, config_content).unwrap();
+
+        // Test 1: API production URL
+        let query_api_prod = QueryReader {
+            file_path: text_path.clone(),
+            query: "https://api.example.com/v2".to_string(),
+        };
+
+        let toml_api_prod = TomlReader {
+            file_path: config_path.clone(),
+            key_path: "api.production_url".to_string(),
+        };
+
+        let linker_api = Linker {
+            a: Accessor::Query(query_api_prod),
+            b: Accessor::Toml(toml_api_prod),
+        };
+
+        assert!(
+            linker_api.check(),
+            "API production URL should match between text and config"
+        );
+
+        // Test 2: Database connection string
+        let query_db = QueryReader {
+            file_path: text_path.clone(),
+            query: "postgresql://user:password@db.example.com:5432/mydb".to_string(),
+        };
+
+        let toml_db = TomlReader {
+            file_path: config_path.clone(),
+            key_path: "database.connection_string".to_string(),
+        };
+
+        let linker_db = Linker {
+            a: Accessor::Query(query_db),
+            b: Accessor::Toml(toml_db),
+        };
+
+        assert!(
+            linker_db.check(),
+            "Database connection string should match between text and config"
+        );
+
+        // Test 3: Numeric value (timeout)
+        let query_timeout = QueryReader {
+            file_path: text_path.clone(),
+            query: "30".to_string(),
+        };
+
+        let toml_timeout = TomlReader {
+            file_path: config_path.clone(),
+            key_path: "database.timeout".to_string(),
+        };
+
+        let linker_timeout = Linker {
+            a: Accessor::Query(query_timeout),
+            b: Accessor::Toml(toml_timeout),
+        };
+
+        assert!(
+            linker_timeout.check(),
+            "Timeout value should match between text and config"
+        );
+
+        // Test 4: Boolean value (debug mode)
+        let query_debug = QueryReader {
+            file_path: text_path.clone(),
+            query: "false".to_string(),
+        };
+
+        let toml_debug = TomlReader {
+            file_path: config_path.clone(),
+            key_path: "features.debug_mode".to_string(),
+        };
+
+        let linker_debug = Linker {
+            a: Accessor::Query(query_debug),
+            b: Accessor::Toml(toml_debug),
+        };
+
+        assert!(
+            linker_debug.check(),
+            "Debug mode value should match between text and config"
+        );
+
+        // Test 5: Non-matching value (intentionally wrong)
+        let query_wrong = QueryReader {
+            file_path: text_path,
+            query: "true".to_string(),
+        };
+
+        let toml_wrong = TomlReader {
+            file_path: config_path,
+            key_path: "features.debug_mode".to_string(),
+        };
+
+        let linker_wrong = Linker {
+            a: Accessor::Query(query_wrong),
+            b: Accessor::Toml(toml_wrong),
+        };
+
+        assert!(
+            !linker_wrong.check(),
+            "Mismatched values should not compare equal"
+        );
     }
 }
