@@ -1,0 +1,27 @@
+[links.foo.a]
+kind = "toml"
+file_path = "test_toml.toml"
+key_path = "test.value"
+[links.foo.b]
+kind = "span"
+file_path = "test_text.txt"
+[links.foo.b.start]
+line = 1
+column = 1
+[links.foo.b.end]
+line = 1
+column = 10
+
+[links.matching.a]
+kind = "toml"
+file_path = "matching_value.toml"
+key_path = "values.greeting"
+[links.matching.b]
+kind = "span"
+file_path = "matching_value.txt"
+[links.matching.b.start]
+line = 2
+column = 1
+[links.matching.b.end]
+line = 2
+column = 11
