@@ -16,7 +16,7 @@ impl Reader for QueryReader {
         });
 
         // Search for the query string
-        if let Some(_) = content.find(&self.query) {
+        if content.contains(&self.query) {
             // Return the query string itself
             self.query.clone()
         } else {

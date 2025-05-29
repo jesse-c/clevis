@@ -66,9 +66,17 @@ impl Reader for SpanReader {
         }
         result.push('\n');
 
-        // Middle lines (entire lines)
-        for line_num in self.start.line..self.end.line - 1 {
-            result.push_str(lines[line_num]);
+        // Middle lines (AKA entire lines)
+        //
+        // Skip to `start.line`, then take (`end.line - start.line -
+        // 1`) lines. This processes all complete lines between the
+        // start and end positions, AKA the middle lines.
+        for line in lines
+            .iter()
+            .skip(self.start.line)
+            .take(self.end.line - self.start.line - 1)
+        {
+            result.push_str(line);
             result.push('\n');
         }
 
