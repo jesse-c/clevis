@@ -1,0 +1,106 @@
+name: CD
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build binary
+        run: cargo build --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: clevis-linux
+          path: target/release/clevis
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build binary
+        run: cargo build --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: clevis-macos
+          path: target/release/clevis
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-macos]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump version
+        id: bump
+        uses: cocogitto/cocogitto-action@v3
+        with:
+          release: true
+          git-user: "${{ github.actor }}"
+          git-user-email: "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Generate changelog
+        run: cog changelog --at ${{ steps.bump.outputs.version }} -t full_hash > GITHUB_CHANGELOG.md
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clevis-linux
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: clevis-macos
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: ${{ steps.bump_version.outputs.version }}
+          body_path: GITHUB_CHANGELOG.md
+          tag_name: ${{ steps.bump_version.outputs.version }}
+          files: |
+            clevis-linux
+            clevis-macos
