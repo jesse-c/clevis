@@ -21,7 +21,7 @@ mod tests;
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Path to the configuration file
-    #[arg(short, long, default_value = "~/.config/clevis/config.toml")]
+    #[arg(short, long, default_value = "./clevis.toml")]
     path: String,
 
     #[command(subcommand)]
