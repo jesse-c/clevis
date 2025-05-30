@@ -47,27 +47,35 @@ enum Commands {
     },
 }
 
-fn main() {
-    let cli = Cli::parse();
-
-    // Expand the tilde in the config path if present
-    let config_path = if cli.path.starts_with("~") {
+fn expand_path(path: &str) -> Result<String, String> {
+    if path.starts_with("~") {
         if let Some(home_dir) = dirs::home_dir() {
-            let path_without_tilde = cli.path.strip_prefix("~").unwrap();
-            home_dir
+            let path_without_tilde = path.strip_prefix("~").unwrap();
+            Ok(home_dir
                 .join(
                     path_without_tilde
                         .strip_prefix('/')
                         .unwrap_or(path_without_tilde),
                 )
                 .to_string_lossy()
-                .into_owned()
+                .into_owned())
         } else {
-            eprintln!("Could not determine home directory");
-            process::exit(1);
+            Err(String::from("Could not determine home directory"))
         }
     } else {
-        cli.path
+        Ok(path.to_string())
+    }
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let config_path = match expand_path(&cli.path) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
     };
 
     // Load the configuration file

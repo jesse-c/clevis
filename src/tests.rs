@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::readers::span::Cursor;
-    use crate::{Accessor, Linker, QueryReader, Reader, SpanReader, TomlReader, YamlReader};
+    use crate::{
+        Accessor, Linker, QueryReader, Reader, SpanReader, TomlReader, YamlReader, expand_path,
+    };
     use std::fs;
     use tempfile::NamedTempFile;
 
@@ -1150,5 +1152,25 @@ last_updated = "2025-05-01"
             !linker_wrong.check(),
             "Mismatched values should not compare equal"
         );
+    }
+
+    #[test]
+    fn test_expand_path_with_tilde() {
+        if let Some(home_dir) = dirs::home_dir() {
+            let result = expand_path("~/test/path").unwrap();
+            let expected = home_dir.join("test/path").to_string_lossy().into_owned();
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_expand_path_without_tilde() {
+        let path = "/absolute/path/test";
+        let result = expand_path(path).unwrap();
+        assert_eq!(result, path);
+
+        let relative_path = "./relative/path";
+        let result = expand_path(relative_path).unwrap();
+        assert_eq!(result, relative_path);
     }
 }
