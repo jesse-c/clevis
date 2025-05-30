@@ -68,7 +68,7 @@ fn main() {
             process::exit(1);
         }
     } else {
-        cli.path.clone()
+        cli.path
     };
 
     // Load the configuration file
