@@ -6,6 +6,7 @@ pub trait Reader {
 }
 
 /// Accessor enum to handle different reader types
+#[derive(Debug)]
 pub enum Accessor {
     Spans(SpanReader),
     Toml(TomlReader),
@@ -25,6 +26,7 @@ impl Accessor {
 }
 
 /// Linker struct to compare values from different readers
+#[derive(Debug)]
 pub struct Linker {
     pub a: Accessor,
     pub b: Accessor,
