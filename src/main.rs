@@ -24,6 +24,9 @@ struct Cli {
     #[arg(short, long, default_value = "./clevis.toml")]
     path: String,
 
+    #[arg(short, long)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -34,10 +37,6 @@ enum Commands {
     Check {
         /// Specific link key to check (if omitted, checks all links)
         link_key: Option<String>,
-
-        /// Show values even when they match
-        #[arg(short, long)]
-        verbose: bool,
     },
     /// List all available links in the configuration
     List {},
@@ -84,7 +83,7 @@ fn main() {
     };
 
     match &cli.command {
-        Commands::Check { link_key, verbose } => {
+        Commands::Check { link_key } => {
             if let Some(link_key) = link_key {
                 // Check a specific link
                 match config.check(link_key) {
@@ -93,7 +92,7 @@ fn main() {
                             println!("✓ Values match for '{}'", link_key);
 
                             // Show the values if verbose mode is enabled
-                            if *verbose {
+                            if cli.verbose {
                                 if let Ok(linker) = config.get_linker(link_key) {
                                     let a_value = linker.a.read();
                                     let b_value = linker.b.read();
@@ -139,7 +138,7 @@ fn main() {
                                 println!("  ✓ '{}': Values match", link_key);
 
                                 // Show the values if verbose mode is enabled
-                                if *verbose {
+                                if cli.verbose {
                                     if let Ok(linker) = config.get_linker(link_key) {
                                         let a_value = linker.a.read();
                                         let b_value = linker.b.read();
@@ -186,6 +185,15 @@ fn main() {
             } else {
                 for link_key in config.links.keys() {
                     println!("  {}", link_key);
+
+                    if cli.verbose {
+                        if let Ok(linker) = config.get_linker(link_key) {
+                            let a_value = linker.a.read();
+                            let b_value = linker.b.read();
+                            println!("    Value A: '{}'", a_value);
+                            println!("    Value B: '{}'", b_value);
+                        }
+                    }
                 }
             }
         }
@@ -196,6 +204,24 @@ fn main() {
                 println!("Values for '{}':", link_key);
                 println!("  Value A: '{}'", a_value);
                 println!("  Value B: '{}'", b_value);
+
+                if cli.verbose {
+                    match config.links.get(link_key) {
+                        Some(link_config) => {
+                            println!("  A source: {:?}", link_config.a);
+                            println!("  B source: {:?}", link_config.b);
+
+                            // Show if values match
+                            let match_result = config.check(link_key).unwrap_or(false);
+                            if match_result {
+                                println!("  Match status: ✓ Values match");
+                            } else {
+                                println!("  Match status: ✗ Values do NOT match");
+                            }
+                        }
+                        None => println!("  No detailed configuration found"),
+                    }
+                }
             } else {
                 println!("Link '{}' not found in config", link_key);
                 process::exit(1);
