@@ -19,10 +19,9 @@ tag_prefix = "v"
 [commit_types]
 ci = { changelog_title = "", omit_from_changelog = true }
 
-
 [changelog]
 path = "CHANGELOG.md"
-authors = []
+authors = [{ username = "jesse-c", signature = "Jesse Claven" }]
 
 [bump_profiles]
 
