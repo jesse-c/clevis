@@ -1,7 +1,15 @@
 name: CD
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (if not provided, version will be automatically bumped)"
+        required: false
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -71,36 +79,65 @@ jobs:
     needs: [build-linux, build-macos]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # This fetches all history and tags
+
+      - name: Check conventional commits
+        uses: cocogitto/cocogitto-action@v3
 
       - name: Bump version
         id: bump
+        if: ${{ github.event.inputs.version == '' || github.event.inputs.version == null }}
         uses: cocogitto/cocogitto-action@v3
         with:
           release: true
           git-user: "${{ github.actor }}"
           git-user-email: "${{ github.actor }}@users.noreply.github.com"
 
+      - name: Set manual version
+        id: manual_version
+        if: ${{ github.event.inputs.version != '' && github.event.inputs.version != null }}
+        run: echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Check if Git tag exists for manual version
+        if: ${{ github.event.inputs.version != '' && github.event.inputs.version != null }}
+        run: |
+          if ! git rev-parse "${{ github.event.inputs.version }}" >/dev/null 2>&1; then
+            echo "::error::Git tag '${{ github.event.inputs.version }}' does not exist. Please provide a valid existing tag."
+            exit 1
+          fi
+
       - name: Generate changelog
-        run: cog changelog --at ${{ steps.bump.outputs.version }} -t full_hash > GITHUB_CHANGELOG.md
+        run: |
+          VERSION="${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}"
+          cog changelog --at $VERSION -t full_hash > GITHUB_CHANGELOG.md
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
           name: clevis-linux
+          path: linux/
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
           name: clevis-macos
+          path: macos/
+
+      - name: Rename binaries
+        run: |
+          mv linux/clevis clevis-linux-x86_64
+          mv macos/clevis clevis-darwin-aarch64
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: ${{ steps.bump_version.outputs.version }}
+          name: ${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}
           body_path: GITHUB_CHANGELOG.md
-          tag_name: ${{ steps.bump_version.outputs.version }}
+          tag_name: ${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}
           files: |
-            clevis-linux
-            clevis-macos
+            clevis-linux-x86_64
+            clevis-darwin-aarch64
+          fail_on_unmatched_files: true
