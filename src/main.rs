@@ -5,7 +5,7 @@ mod readers;
 
 // Re-export modules for easier access
 pub use config::Config;
-pub use error::{ClevisError, Result};
+pub use error::{AppError, Result};
 pub use readers::{Accessor, Linker, QueryReader, Reader, SpanReader, TomlReader, YamlReader};
 
 // Import standard library modules
@@ -15,7 +15,7 @@ use std::process;
 use clap::{Parser, Subcommand};
 
 // Import anyhow for error handling
-use anyhow::{Context, Result};
+use anyhow::Context;
 
 // Import the tests module directly in the file
 #[cfg(test)]
@@ -72,7 +72,7 @@ fn expand_path(path: &str) -> String {
     }
 }
 
-fn show_values(a: &Accessor, b: &Accessor) -> Result<()> {
+fn show_values(a: &Accessor, b: &Accessor) -> anyhow::Result<()> {
     match (a.read(), b.read()) {
         (Ok(a_value), Ok(b_value)) => {
             println!("  Value A: '{}'", a_value);
@@ -86,37 +86,29 @@ fn show_values(a: &Accessor, b: &Accessor) -> Result<()> {
 
 fn main() {
     if let Err(e) = run() {
-        // Handle different error types with specific exit codes
         eprintln!("Error: {}", e);
-        
-        // Check error chain for specific error types
-        let mut exit_code = 1;
-        for err in e.chain() {
-            let err_str = err.to_string();
-            if err_str.contains("Failed to read config file") {
-                exit_code = 2;
-                break;
-            } else if err_str.contains("Failed to parse") {
-                exit_code = 3;
-                break;
-            } else if err_str.contains("not found") {
-                exit_code = 4;
-                break;
-            }
-        }
-        
+
+        // Handle different error types with specific exit codes
+        let exit_code = match e.downcast_ref::<AppError>() {
+            Some(AppError::FileOperation { .. }) => 2,
+            Some(AppError::Parse { .. }) => 3,
+            Some(AppError::KeyNotFound { .. }) | Some(AppError::QueryNotFound { .. }) => 4,
+            Some(AppError::ConfigError { .. }) => 5,
+            _ => 1,
+        };
+
         process::exit(exit_code);
     }
 }
 
-fn run() -> Result<()> {
+fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let config_path = expand_path(&cli.path);
 
     // Load the configuration file
     let config = Config::load(&config_path)
         .with_context(|| format!("Failed to load configuration from: {}", config_path))?;
-    
+
     if cli.verbose {
         println!("Loaded config: {}", config_path);
     }
@@ -125,9 +117,10 @@ fn run() -> Result<()> {
         Commands::Check { link_key } => {
             if let Some(link_key) = link_key {
                 // Check a specific link
-                let result = config.check(link_key)
+                let result = config
+                    .check(link_key)
                     .with_context(|| format!("Failed to check link: {}", link_key))?;
-                
+
                 if result {
                     println!("✓ Values match for '{}'", link_key);
 
@@ -142,7 +135,7 @@ fn run() -> Result<()> {
                     // Show the values for better debugging
                     let linker = config.get_linker(link_key)?;
                     show_values(&linker.a, &linker.b)?;
-                    
+
                     anyhow::bail!("Values do not match for link: {}", link_key);
                 }
             } else {
@@ -166,10 +159,14 @@ fn run() -> Result<()> {
                                 // Show the values if verbose mode is enabled
                                 if cli.verbose {
                                     if let Ok(linker) = config.get_linker(link_key) {
-                                        let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
-                                        let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
-                                        println!("    Value A: '{}'", a_value);
-                                        println!("    Value B: '{}'", b_value);
+                                        match (linker.a.read(), linker.b.read()) {
+                                            (Ok(a_value), Ok(b_value)) => {
+                                                println!("    Value A: '{}'", a_value);
+                                                println!("    Value B: '{}'", b_value);
+                                            }
+                                            (Err(e), _) => println!("    Error reading A: {}", e),
+                                            (_, Err(e)) => println!("    Error reading B: {}", e),
+                                        }
                                     }
                                 }
                             } else {
@@ -218,10 +215,14 @@ fn run() -> Result<()> {
 
                     if cli.verbose {
                         if let Ok(linker) = config.get_linker(link_key) {
-                            let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
-                            let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
-                            println!("    Value A: '{}'", a_value);
-                            println!("    Value B: '{}'", b_value);
+                            match (linker.a.read(), linker.b.read()) {
+                                (Ok(a_value), Ok(b_value)) => {
+                                    println!("    Value A: '{}'", a_value);
+                                    println!("    Value B: '{}'", b_value);
+                                }
+                                (Err(e), _) => println!("    Error reading A: {}", e),
+                                (_, Err(e)) => println!("    Error reading B: {}", e),
+                            }
                         }
                     }
                 }
@@ -229,11 +230,15 @@ fn run() -> Result<()> {
         }
         Commands::Show { link_key } => {
             if let Ok(linker) = config.get_linker(link_key) {
-                let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
-                let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
                 println!("Values for '{}':", link_key);
-                println!("  Value A: '{}'", a_value);
-                println!("  Value B: '{}'", b_value);
+                match (linker.a.read(), linker.b.read()) {
+                    (Ok(a_value), Ok(b_value)) => {
+                        println!("  Value A: '{}'", a_value);
+                        println!("  Value B: '{}'", b_value);
+                    }
+                    (Err(e), _) => println!("  Error reading A: {}", e),
+                    (_, Err(e)) => println!("  Error reading B: {}", e),
+                }
 
                 if cli.verbose {
                     match config.links.get(link_key) {
@@ -257,6 +262,6 @@ fn run() -> Result<()> {
             }
         }
     }
-    
+
     Ok(())
 }

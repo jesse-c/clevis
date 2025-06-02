@@ -1,5 +1,5 @@
+use crate::error::Result;
 use crate::readers::{QueryReader, SpanReader, TomlReader, YamlReader};
-use anyhow::Result;
 
 /// Common trait for all reader types
 pub trait Reader {

@@ -523,7 +523,10 @@ name = "John Doe"
             b: Accessor::Toml(toml_reader_num),
         };
 
-        assert!(linker_num.check().unwrap(), "Same numeric values should match");
+        assert!(
+            linker_num.check().unwrap(),
+            "Same numeric values should match"
+        );
 
         // Temporary files will be automatically cleaned up when they go out of scope
     }
@@ -637,7 +640,10 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Spans(span_reader_bool),
         };
 
-        assert!(linker_bool.check().unwrap(), "Boolean value comparison should match");
+        assert!(
+            linker_bool.check().unwrap(),
+            "Boolean value comparison should match"
+        );
 
         // Test 4: Compare array value with index
         let toml_reader_array = TomlReader {
@@ -656,7 +662,10 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Spans(span_reader_array),
         };
 
-        assert!(linker_array.check().unwrap(), "Array value comparison should match");
+        assert!(
+            linker_array.check().unwrap(),
+            "Array value comparison should match"
+        );
 
         // Test 5: Compare nested value
         let toml_reader_nested = TomlReader {
@@ -795,7 +804,10 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader_array),
         };
 
-        assert!(linker_array.check().unwrap(), "Array value comparison should match");
+        assert!(
+            linker_array.check().unwrap(),
+            "Array value comparison should match"
+        );
 
         // Test 4: Create a YAML file with different values
         let test_yaml_different = "---\nserver:\n  host: different-host\n  port: 9090\n";
@@ -817,7 +829,10 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader_diff),
         };
 
-        assert!(!linker_diff.check().unwrap(), "Different values should not match");
+        assert!(
+            !linker_diff.check().unwrap(),
+            "Different values should not match"
+        );
 
         // Temporary files will be automatically cleaned up when they go out of scope
     }
@@ -858,7 +873,10 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader),
         };
 
-        assert!(linker.check().unwrap(), "Matching values should compare equal");
+        assert!(
+            linker.check().unwrap(),
+            "Matching values should compare equal"
+        );
 
         // Test 2: Create a span with different content
         fs::write(&span_diff_path, "different").unwrap();

@@ -20,8 +20,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use crate::error::{AppError, Result};
 use crate::readers::{Accessor, Linker, SpanReader, TomlReader, span::Cursor};
+use anyhow::Context;
 
 /// Configuration structure that directly stores Linkers.
 ///
@@ -61,12 +62,17 @@ impl Config {
         let config_dir = config_path.parent().unwrap_or_else(|| Path::new("."));
 
         // Read the file
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config file: {}", path))?;
+        let content = fs::read_to_string(path).map_err(|e| AppError::FileOperation {
+            path: path.to_string(),
+            source: e,
+        })?;
 
         // Parse the TOML
-        let parsed: toml::Value = content.parse()
-            .with_context(|| format!("Failed to parse TOML config file: {}", path))?;
+        let parsed: toml::Value = content.parse().map_err(|e| AppError::Parse {
+            file_type: "TOML".to_string(),
+            path: path.to_string(),
+            source: anyhow::Error::from(e),
+        })?;
 
         // Convert to our Config structure with the config directory for resolving relative paths
         Self::parse_config(parsed, config_dir)
@@ -102,12 +108,12 @@ impl Config {
             for (link_key, link_value) in links {
                 if let Some(link_table) = link_value.as_table() {
                     // Each link should have exactly two entries: 'a' and 'b'
-                    let a_value = link_table
-                        .get("a")
-                        .with_context(|| format!("Missing 'a' in link '{}'", link_key))?;
-                    let b_value = link_table
-                        .get("b")
-                        .with_context(|| format!("Missing 'b' in link '{}'", link_key))?;
+                    let a_value = link_table.get("a").ok_or_else(|| AppError::ConfigError {
+                        message: format!("Missing 'a' in link '{}'", link_key),
+                    })?;
+                    let b_value = link_table.get("b").ok_or_else(|| AppError::ConfigError {
+                        message: format!("Missing 'b' in link '{}'", link_key),
+                    })?;
 
                     // Parse 'a' accessor
                     let a_kind = a_value
@@ -115,117 +121,130 @@ impl Config {
                         .and_then(|v| v.as_str())
                         .with_context(|| format!("Missing 'kind' in link '{}.a'", link_key))?;
 
-                    let a_accessor =
-                        match a_kind {
-                            "toml" => {
-                                let raw_file_path = a_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.a'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let key_path = a_value
-                                    .get("key_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'key_path' in link '{}.a'", link_key)
-                                    })?;
+                    let a_accessor = match a_kind {
+                        "toml" => {
+                            let raw_file_path = a_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.a'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let key_path = a_value
+                                .get("key_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                    format!("Missing 'key_path' in link '{}.a'", link_key)
+                                })?;
 
-                                Accessor::Toml(TomlReader {
-                                    file_path,
-                                    key_path: key_path.to_string(),
-                                })
-                            }
-                            "span" => {
-                                let raw_file_path = a_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.a'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            Accessor::Toml(TomlReader {
+                                file_path,
+                                key_path: key_path.to_string(),
+                            })
+                        }
+                        "span" => {
+                            let raw_file_path = a_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.a'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
 
-                                // Get start cursor
-                                let start = a_value
-                                    .get("start")
-                                    .and_then(|v| v.as_table())
-                                    .with_context(|| format!("Missing 'start' in link '{}.a'", link_key))?;
-                                let start_line = start
-                                    .get("line")
-                                    .and_then(|v| v.as_integer())
-                                    .with_context(|| format!("Missing 'start.line' in link '{}.a'", link_key))?;
-                                let start_column = start
-                                    .get("column")
-                                    .and_then(|v| v.as_integer())
-                                    .with_context(|| {
-                                        format!("Missing 'start.column' in link '{}.a'", link_key)
-                                    })?;
+                            // Get start cursor
+                            let start = a_value
+                                .get("start")
+                                .and_then(|v| v.as_table())
+                                .with_context(|| {
+                                    format!("Missing 'start' in link '{}.a'", link_key)
+                                })?;
+                            let start_line = start
+                                .get("line")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'start.line' in link '{}.a'", link_key)
+                                })?;
+                            let start_column = start
+                                .get("column")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'start.column' in link '{}.a'", link_key)
+                                })?;
 
-                                // Get end cursor
-                                let end =
-                                    a_value.get("end").and_then(|v| v.as_table()).with_context(|| format!("Missing 'end' in link '{}.a'", link_key),
-                                    )?;
-                                let end_line =
-                                    end.get("line").and_then(|v| v.as_integer()).with_context(|| format!("Missing 'end.line' in link '{}.a'", link_key),
-                                    )?;
-                                let end_column =
-                                    end.get("column").and_then(|v| v.as_integer()).with_context(|| format!("Missing 'end.column' in link '{}.a'", link_key),
-                                    )?;
+                            // Get end cursor
+                            let end = a_value.get("end").and_then(|v| v.as_table()).with_context(
+                                || format!("Missing 'end' in link '{}.a'", link_key),
+                            )?;
+                            let end_line =
+                                end.get("line").and_then(|v| v.as_integer()).with_context(
+                                    || format!("Missing 'end.line' in link '{}.a'", link_key),
+                                )?;
+                            let end_column = end
+                                .get("column")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'end.column' in link '{}.a'", link_key)
+                                })?;
 
-                                Accessor::Spans(SpanReader {
-                                    file_path,
-                                    start: Cursor {
-                                        line: start_line as usize,
-                                        column: start_column as usize,
-                                    },
-                                    end: Cursor {
-                                        line: end_line as usize,
-                                        column: end_column as usize,
-                                    },
-                                })
-                            }
-                            "yaml" => {
-                                let raw_file_path = a_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.a'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let key_path = a_value
-                                    .get("key_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'key_path' in link '{}.a'", link_key)
-                                    })?;
+                            Accessor::Spans(SpanReader {
+                                file_path,
+                                start: Cursor {
+                                    line: start_line as usize,
+                                    column: start_column as usize,
+                                },
+                                end: Cursor {
+                                    line: end_line as usize,
+                                    column: end_column as usize,
+                                },
+                            })
+                        }
+                        "yaml" => {
+                            let raw_file_path = a_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.a'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let key_path = a_value
+                                .get("key_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                    format!("Missing 'key_path' in link '{}.a'", link_key)
+                                })?;
 
-                                Accessor::Yaml(crate::readers::YamlReader {
-                                    file_path,
-                                    key_path: key_path.to_string(),
-                                })
-                            }
-                            "query" => {
-                                let raw_file_path = a_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.a'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let query =
-                                    a_value.get("query").and_then(|v| v.as_str()).with_context(|| format!("Missing 'query' in link '{}.a'", link_key),
-                                    )?;
+                            Accessor::Yaml(crate::readers::YamlReader {
+                                file_path,
+                                key_path: key_path.to_string(),
+                            })
+                        }
+                        "query" => {
+                            let raw_file_path = a_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.a'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let query =
+                                a_value.get("query").and_then(|v| v.as_str()).with_context(
+                                    || format!("Missing 'query' in link '{}.a'", link_key),
+                                )?;
 
-                                Accessor::Query(crate::readers::QueryReader {
-                                    file_path,
-                                    query: query.to_string(),
-                                })
-                            }
-                            _ => {
-                                anyhow::bail!("Unknown kind '{}' in link '{}.a'", a_kind, link_key);
-                            }
-                        };
+                            Accessor::Query(crate::readers::QueryReader {
+                                file_path,
+                                query: query.to_string(),
+                            })
+                        }
+                        _ => {
+                            return Err(AppError::ConfigError {
+                                message: format!(
+                                    "Unknown kind '{}' in link '{}.a'",
+                                    a_kind, link_key
+                                ),
+                            });
+                        }
+                    };
 
                     // Parse 'b' accessor
                     let b_kind = b_value
@@ -233,115 +252,130 @@ impl Config {
                         .and_then(|v| v.as_str())
                         .with_context(|| format!("Missing 'kind' in link '{}.b'", link_key))?;
 
-                    let b_accessor =
-                        match b_kind {
-                            "toml" => {
-                                let raw_file_path = b_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.b'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let key_path = b_value
-                                    .get("key_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'key_path' in link '{}.b'", link_key)
-                                    })?;
+                    let b_accessor = match b_kind {
+                        "toml" => {
+                            let raw_file_path = b_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.b'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let key_path = b_value
+                                .get("key_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                    format!("Missing 'key_path' in link '{}.b'", link_key)
+                                })?;
 
-                                Accessor::Toml(TomlReader {
-                                    file_path,
-                                    key_path: key_path.to_string(),
-                                })
-                            }
-                            "span" => {
-                                let raw_file_path = b_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.b'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            Accessor::Toml(TomlReader {
+                                file_path,
+                                key_path: key_path.to_string(),
+                            })
+                        }
+                        "span" => {
+                            let raw_file_path = b_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.b'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
 
-                                // Get start cursor
-                                let start =
-                                    b_value.get("start").and_then(|v| v.as_table()).with_context(|| format!("Missing 'start' in link '{}.b'", link_key),
-                                    )?;
-                                let start_line =
-                                    start.get("line").and_then(|v| v.as_integer()).with_context(|| format!("Missing 'start.line' in link '{}.b'", link_key),
-                                    )?;
-                                let start_column = start
-                                    .get("column")
-                                    .and_then(|v| v.as_integer())
-                                    .with_context(|| {
-                                        format!("Missing 'start.column' in link '{}.b'", link_key)
-                                    })?;
+                            // Get start cursor
+                            let start = b_value
+                                .get("start")
+                                .and_then(|v| v.as_table())
+                                .with_context(|| {
+                                    format!("Missing 'start' in link '{}.b'", link_key)
+                                })?;
+                            let start_line = start
+                                .get("line")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'start.line' in link '{}.b'", link_key)
+                                })?;
+                            let start_column = start
+                                .get("column")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'start.column' in link '{}.b'", link_key)
+                                })?;
 
-                                // Get end cursor
-                                let end =
-                                    b_value.get("end").and_then(|v| v.as_table()).with_context(|| format!("Missing 'end' in link '{}.b'", link_key),
-                                    )?;
-                                let end_line =
-                                    end.get("line").and_then(|v| v.as_integer()).with_context(|| format!("Missing 'end.line' in link '{}.b'", link_key),
-                                    )?;
-                                let end_column =
-                                    end.get("column").and_then(|v| v.as_integer()).with_context(|| format!("Missing 'end.column' in link '{}.b'", link_key),
-                                    )?;
+                            // Get end cursor
+                            let end = b_value.get("end").and_then(|v| v.as_table()).with_context(
+                                || format!("Missing 'end' in link '{}.b'", link_key),
+                            )?;
+                            let end_line =
+                                end.get("line").and_then(|v| v.as_integer()).with_context(
+                                    || format!("Missing 'end.line' in link '{}.b'", link_key),
+                                )?;
+                            let end_column = end
+                                .get("column")
+                                .and_then(|v| v.as_integer())
+                                .with_context(|| {
+                                    format!("Missing 'end.column' in link '{}.b'", link_key)
+                                })?;
 
-                                Accessor::Spans(SpanReader {
-                                    file_path,
-                                    start: Cursor {
-                                        line: start_line as usize,
-                                        column: start_column as usize,
-                                    },
-                                    end: Cursor {
-                                        line: end_line as usize,
-                                        column: end_column as usize,
-                                    },
-                                })
-                            }
-                            "yaml" => {
-                                let raw_file_path = b_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.b'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let key_path = b_value
-                                    .get("key_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'key_path' in link '{}.b'", link_key)
-                                    })?;
+                            Accessor::Spans(SpanReader {
+                                file_path,
+                                start: Cursor {
+                                    line: start_line as usize,
+                                    column: start_column as usize,
+                                },
+                                end: Cursor {
+                                    line: end_line as usize,
+                                    column: end_column as usize,
+                                },
+                            })
+                        }
+                        "yaml" => {
+                            let raw_file_path = b_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.b'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let key_path = b_value
+                                .get("key_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                    format!("Missing 'key_path' in link '{}.b'", link_key)
+                                })?;
 
-                                Accessor::Yaml(crate::readers::YamlReader {
-                                    file_path,
-                                    key_path: key_path.to_string(),
-                                })
-                            }
-                            "query" => {
-                                let raw_file_path = b_value
-                                    .get("file_path")
-                                    .and_then(|v| v.as_str())
-                                    .with_context(|| {
-                                        format!("Missing 'file_path' in link '{}.b'", link_key)
-                                    })?;
-                                let file_path = Self::resolve_path(raw_file_path, config_dir);
-                                let query =
-                                    b_value.get("query").and_then(|v| v.as_str()).with_context(|| format!("Missing 'query' in link '{}.b'", link_key),
-                                    )?;
+                            Accessor::Yaml(crate::readers::YamlReader {
+                                file_path,
+                                key_path: key_path.to_string(),
+                            })
+                        }
+                        "query" => {
+                            let raw_file_path = b_value
+                                .get("file_path")
+                                .and_then(|v| v.as_str())
+                                .with_context(|| {
+                                format!("Missing 'file_path' in link '{}.b'", link_key)
+                            })?;
+                            let file_path = Self::resolve_path(raw_file_path, config_dir);
+                            let query =
+                                b_value.get("query").and_then(|v| v.as_str()).with_context(
+                                    || format!("Missing 'query' in link '{}.b'", link_key),
+                                )?;
 
-                                Accessor::Query(crate::readers::QueryReader {
-                                    file_path,
-                                    query: query.to_string(),
-                                })
-                            }
-                            _ => {
-                                anyhow::bail!("Unknown kind '{}' in link '{}.b'", b_kind, link_key);
-                            }
-                        };
+                            Accessor::Query(crate::readers::QueryReader {
+                                file_path,
+                                query: query.to_string(),
+                            })
+                        }
+                        _ => {
+                            return Err(AppError::ConfigError {
+                                message: format!(
+                                    "Unknown kind '{}' in link '{}.b'",
+                                    b_kind, link_key
+                                ),
+                            });
+                        }
+                    };
 
                     // Create the Linker directly
                     let linker = Linker {
@@ -384,7 +418,10 @@ impl Config {
     pub fn get_linker(&self, link_key: &str) -> Result<&Linker> {
         self.links
             .get(link_key)
-            .with_context(|| format!("Link '{}' not found", link_key))
+            .ok_or_else(|| AppError::KeyNotFound {
+                key_path: link_key.to_string(),
+                file_path: "config".to_string(),
+            })
     }
 
     /// Check if values match for a specific link.

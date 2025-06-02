@@ -1,5 +1,6 @@
+use crate::error::{AppError, Result};
 use crate::readers::Reader;
-use anyhow::{Context, Result};
+use anyhow::Context;
 use saphyr::LoadableYamlNode;
 use std::fs;
 
@@ -12,8 +13,10 @@ pub struct YamlReader {
 
 impl Reader for YamlReader {
     fn read(&self) -> Result<String> {
-        let content = fs::read_to_string(&self.file_path)
-            .with_context(|| format!("Failed to read YAML file: {}", self.file_path))?;
+        let content = fs::read_to_string(&self.file_path).map_err(|e| AppError::FileOperation {
+            path: self.file_path.clone(),
+            source: e,
+        })?;
 
         let content_with_marker = if !content.trim_start().starts_with("---") {
             format!("---\n{}", content)
@@ -21,11 +24,19 @@ impl Reader for YamlReader {
             content
         };
 
-        let docs = saphyr::Yaml::load_from_str(&content_with_marker)
-            .with_context(|| format!("Failed to parse YAML content in: {}", self.file_path))?;
+        let docs =
+            saphyr::Yaml::load_from_str(&content_with_marker).map_err(|e| AppError::Parse {
+                file_type: "YAML".to_string(),
+                path: self.file_path.clone(),
+                source: anyhow::Error::from(e),
+            })?;
 
         if docs.is_empty() {
-            anyhow::bail!("No YAML documents found in file: {}", self.file_path);
+            return Err(AppError::Parse {
+                file_type: "YAML".to_string(),
+                path: self.file_path.clone(),
+                source: anyhow::Error::msg("No YAML documents found"),
+            });
         }
 
         let doc = &docs[0];
@@ -47,30 +58,43 @@ impl Reader for YamlReader {
 
                     let array_value = &current_value[key_name];
                     if let Some(arr) = array_value.as_sequence() {
-                        let index = index_str
-                            .parse::<usize>()
-                            .with_context(|| format!("Invalid array index '{}' in YAML file: {}", index_str, self.file_path))?;
+                        let index = index_str.parse::<usize>().with_context(|| {
+                            format!(
+                                "Invalid array index '{}' in YAML file: {}",
+                                index_str, self.file_path
+                            )
+                        })?;
                         if index < arr.len() {
                             current_value = &arr[index];
                         } else {
-                            anyhow::bail!(
-                                "Array index out of bounds in {}: key '{}' has length {} but index is {}",
-                                self.file_path,
-                                key_name,
-                                arr.len(),
-                                index
-                            );
+                            return Err(AppError::KeyNotFound {
+                                key_path: format!("{}[{}]", key_name, index),
+                                file_path: self.file_path.clone(),
+                            });
                         }
                     } else {
-                        anyhow::bail!("Value at '{}' is not an array in YAML file: {}", key_name, self.file_path);
+                        return Err(AppError::KeyNotFound {
+                            key_path: key_name.to_string(),
+                            file_path: self.file_path.clone(),
+                        });
                     }
                 } else {
-                    anyhow::bail!("Malformed array index notation '{}' in YAML file: {}", part, self.file_path);
+                    return Err(AppError::Parse {
+                        file_type: "YAML".to_string(),
+                        path: self.file_path.clone(),
+                        source: anyhow::Error::msg(format!(
+                            "Malformed array index notation '{}'",
+                            part
+                        )),
+                    });
                 }
             } else {
                 current_value = &current_value[part];
                 if current_value.is_badvalue() {
-                    anyhow::bail!("Key '{}' not found in YAML file: {}", current_path, self.file_path);
+                    return Err(AppError::KeyNotFound {
+                        key_path: current_path.clone(),
+                        file_path: self.file_path.clone(),
+                    });
                 }
             }
         }
@@ -84,7 +108,10 @@ impl Reader for YamlReader {
         } else if let Some(b) = current_value.as_bool() {
             Ok(b.to_string())
         } else if current_value.is_sequence() {
-            anyhow::bail!("Array access requires a specific index, e.g. 'key[0]' in YAML file: {}", self.file_path)
+            Err(AppError::KeyNotFound {
+                key_path: format!("{} (array requires index)", self.key_path),
+                file_path: self.file_path.clone(),
+            })
         } else if current_value.is_mapping() {
             Ok("[Object]".to_string())
         } else if current_value.is_null() {
