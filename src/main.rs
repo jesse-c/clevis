@@ -1,9 +1,11 @@
 // Import modules
 mod config;
+mod error;
 mod readers;
 
 // Re-export modules for easier access
 pub use config::Config;
+pub use error::{ClevisError, Result};
 pub use readers::{Accessor, Linker, QueryReader, Reader, SpanReader, TomlReader, YamlReader};
 
 // Import standard library modules
@@ -11,6 +13,9 @@ use std::process;
 
 // Import clap for CLI
 use clap::{Parser, Subcommand};
+
+// Import anyhow for error handling
+use anyhow::{Context, Result};
 
 // Import the tests module directly in the file
 #[cfg(test)]
@@ -47,85 +52,98 @@ enum Commands {
     },
 }
 
-fn expand_path(path: &str) -> Result<String, String> {
-    if path.starts_with("~") {
+fn expand_path(path: &str) -> String {
+    if let Some(path_without_tilde) = path.strip_prefix("~") {
         if let Some(home_dir) = dirs::home_dir() {
-            let path_without_tilde = path.strip_prefix("~").unwrap();
-            Ok(home_dir
+            home_dir
                 .join(
                     path_without_tilde
                         .strip_prefix('/')
                         .unwrap_or(path_without_tilde),
                 )
                 .to_string_lossy()
-                .into_owned())
+                .into_owned()
         } else {
-            Err(String::from("Could not determine home directory"))
+            // Fallback to original path if home dir unavailable
+            path.to_string()
         }
     } else {
-        Ok(path.to_string())
+        path.to_string()
     }
 }
 
-fn main() {
-    let cli = Cli::parse();
-
-    let config_path = match expand_path(&cli.path) {
-        Ok(path) => path,
-        Err(e) => {
-            eprintln!("{}", e);
-            process::exit(1);
+fn show_values(a: &Accessor, b: &Accessor) -> Result<()> {
+    match (a.read(), b.read()) {
+        (Ok(a_value), Ok(b_value)) => {
+            println!("  Value A: '{}'", a_value);
+            println!("  Value B: '{}'", b_value);
         }
-    };
+        (Err(e), _) => println!("  Error reading A: {}", e),
+        (_, Err(e)) => println!("  Error reading B: {}", e),
+    }
+    Ok(())
+}
+
+fn main() {
+    if let Err(e) = run() {
+        // Handle different error types with specific exit codes
+        eprintln!("Error: {}", e);
+        
+        // Check error chain for specific error types
+        let mut exit_code = 1;
+        for err in e.chain() {
+            let err_str = err.to_string();
+            if err_str.contains("Failed to read config file") {
+                exit_code = 2;
+                break;
+            } else if err_str.contains("Failed to parse") {
+                exit_code = 3;
+                break;
+            } else if err_str.contains("not found") {
+                exit_code = 4;
+                break;
+            }
+        }
+        
+        process::exit(exit_code);
+    }
+}
+
+fn run() -> Result<()> {
+    let cli = Cli::parse();
+    let config_path = expand_path(&cli.path);
 
     // Load the configuration file
-    let config = match Config::load(&config_path) {
-        Ok(config) => {
-            println!("Loaded config '{}'", config_path);
-            config
-        }
-        Err(e) => {
-            println!("Failed to load config '{}': {}", config_path, e);
-            process::exit(1);
-        }
-    };
+    let config = Config::load(&config_path)
+        .with_context(|| format!("Failed to load configuration from: {}", config_path))?;
+    
+    if cli.verbose {
+        println!("Loaded config: {}", config_path);
+    }
 
     match &cli.command {
         Commands::Check { link_key } => {
             if let Some(link_key) = link_key {
                 // Check a specific link
-                match config.check(link_key) {
-                    Ok(result) => {
-                        if result {
-                            println!("✓ Values match for '{}'", link_key);
+                let result = config.check(link_key)
+                    .with_context(|| format!("Failed to check link: {}", link_key))?;
+                
+                if result {
+                    println!("✓ Values match for '{}'", link_key);
 
-                            // Show the values if verbose mode is enabled
-                            if cli.verbose {
-                                if let Ok(linker) = config.get_linker(link_key) {
-                                    let a_value = linker.a.read();
-                                    let b_value = linker.b.read();
-                                    println!("  Value A: '{}'", a_value);
-                                    println!("  Value B: '{}'", b_value);
-                                }
-                            }
-                        } else {
-                            println!("✗ Values do NOT match for '{}'", link_key);
-
-                            // Show the values for better debugging
-                            if let Ok(linker) = config.get_linker(link_key) {
-                                let a_value = linker.a.read();
-                                let b_value = linker.b.read();
-                                println!("  Value A: '{}'", a_value);
-                                println!("  Value B: '{}'", b_value);
-                            }
-
-                            process::exit(1);
-                        }
+                    // Show the values if verbose mode is enabled
+                    if cli.verbose {
+                        let linker = config.get_linker(link_key)?;
+                        show_values(&linker.a, &linker.b)?;
                     }
-                    Err(e) => {
-                        println!("Error checking link '{}': {}", link_key, e);
-                        process::exit(1);
-                    }
+                } else {
+                    println!("✗ Values do NOT match for '{}'", link_key);
+
+                    // Show the values for better debugging
+                    let linker = config.get_linker(link_key)?;
+                    show_values(&linker.a, &linker.b)?;
+                    
+                    anyhow::bail!("Values do not match for link: {}", link_key);
                 }
             } else {
                 // Check all links
@@ -134,7 +152,7 @@ fn main() {
 
                 if config.links.is_empty() {
                     println!("No links found in config file");
-                    process::exit(0);
+                    return Ok(());
                 }
 
                 println!("Checking all links in {}:", config_path);
@@ -148,8 +166,8 @@ fn main() {
                                 // Show the values if verbose mode is enabled
                                 if cli.verbose {
                                     if let Ok(linker) = config.get_linker(link_key) {
-                                        let a_value = linker.a.read();
-                                        let b_value = linker.b.read();
+                                        let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
+                                        let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
                                         println!("    Value A: '{}'", a_value);
                                         println!("    Value B: '{}'", b_value);
                                     }
@@ -159,10 +177,14 @@ fn main() {
 
                                 // Show the values for better debugging
                                 if let Ok(linker) = config.get_linker(link_key) {
-                                    let a_value = linker.a.read();
-                                    let b_value = linker.b.read();
-                                    println!("    Value A: '{}'", a_value);
-                                    println!("    Value B: '{}'", b_value);
+                                    match (linker.a.read(), linker.b.read()) {
+                                        (Ok(a_value), Ok(b_value)) => {
+                                            println!("    Value A: '{}'", a_value);
+                                            println!("    Value B: '{}'", b_value);
+                                        }
+                                        (Err(e), _) => println!("    Error reading A: {}", e),
+                                        (_, Err(e)) => println!("    Error reading B: {}", e),
+                                    }
                                 }
 
                                 all_passed = false;
@@ -181,7 +203,7 @@ fn main() {
                     println!("\nAll links passed!");
                 } else {
                     println!("\nFailed links: {}", failed_links.join(", "));
-                    process::exit(1);
+                    anyhow::bail!("Some links failed");
                 }
             }
         }
@@ -196,8 +218,8 @@ fn main() {
 
                     if cli.verbose {
                         if let Ok(linker) = config.get_linker(link_key) {
-                            let a_value = linker.a.read();
-                            let b_value = linker.b.read();
+                            let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
+                            let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
                             println!("    Value A: '{}'", a_value);
                             println!("    Value B: '{}'", b_value);
                         }
@@ -207,8 +229,8 @@ fn main() {
         }
         Commands::Show { link_key } => {
             if let Ok(linker) = config.get_linker(link_key) {
-                let a_value = linker.a.read();
-                let b_value = linker.b.read();
+                let a_value = linker.a.read().unwrap_or_else(|e| format!("<error: {}>", e));
+                let b_value = linker.b.read().unwrap_or_else(|e| format!("<error: {}>", e));
                 println!("Values for '{}':", link_key);
                 println!("  Value A: '{}'", a_value);
                 println!("  Value B: '{}'", b_value);
@@ -231,9 +253,10 @@ fn main() {
                     }
                 }
             } else {
-                println!("Link '{}' not found in config", link_key);
-                process::exit(1);
+                anyhow::bail!("Link '{}' not found in config", link_key);
             }
         }
     }
+    
+    Ok(())
 }

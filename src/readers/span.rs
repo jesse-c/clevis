@@ -1,4 +1,5 @@
 use crate::readers::Reader;
+use anyhow::{Context, Result};
 
 /// Represents a cursor position in a file
 #[derive(Clone, Debug)]
@@ -16,61 +17,48 @@ pub struct SpanReader {
 }
 
 impl Reader for SpanReader {
-    fn read(&self) -> String {
-        use std::fs;
-
-        // Load the entire file into memory and split into lines
-        let content = fs::read_to_string(&self.file_path).unwrap_or_default();
+    fn read(&self) -> Result<String> {
+        let content = std::fs::read_to_string(&self.file_path)
+            .with_context(|| format!("Failed to read file: {}", self.file_path))?;
         let lines: Vec<&str> = content.lines().collect();
 
-        // Check for out-of-bounds or invalid cursor positions
         if self.start.line == 0
             || self.end.line == 0
             || self.start.line > lines.len()
             || self.end.line > lines.len()
             || self.start.line > self.end.line
         {
-            panic!(
-                "out-of-bounds start and end lines: start={}, end={}, total_lines={}",
+            anyhow::bail!(
+                "Invalid span in {}: start line {}, end line {}, total lines {}",
+                self.file_path,
                 self.start.line,
                 self.end.line,
                 lines.len()
             );
         }
 
-        // Single line span
         if self.start.line == self.end.line {
             let line = lines[self.start.line - 1];
-
-            // Check column bounds
             if self.start.column > line.len() || self.end.column > line.len() {
-                panic!(
-                    "out-of-bounds start and end columns: start={}, end={}, line_length={}",
+                anyhow::bail!(
+                    "Invalid column span in {} at line {}: start column {}, end column {}, line length {}",
+                    self.file_path,
+                    self.start.line,
                     self.start.column,
                     self.end.column,
                     line.len()
                 );
             }
-
-            // Extract the span from the single line
-            return line[self.start.column - 1..self.end.column].to_string();
+            return Ok(line[self.start.column - 1..self.end.column].to_string());
         }
 
-        // Multi-line span
         let mut result = String::new();
-
-        // First line (from start column to end of line)
         let first_line = lines[self.start.line - 1];
         if self.start.column <= first_line.len() {
             result.push_str(&first_line[self.start.column - 1..]);
         }
         result.push('\n');
 
-        // Middle lines (AKA entire lines)
-        //
-        // Skip to `start.line`, then take (`end.line - start.line -
-        // 1`) lines. This processes all complete lines between the
-        // start and end positions, AKA the middle lines.
         for line in lines
             .iter()
             .skip(self.start.line)
@@ -80,7 +68,6 @@ impl Reader for SpanReader {
             result.push('\n');
         }
 
-        // Last line (from start of line to end column)
         let last_line = lines[self.end.line - 1];
         if self.end.column <= last_line.len() {
             result.push_str(&last_line[..self.end.column]);
@@ -88,6 +75,6 @@ impl Reader for SpanReader {
             result.push_str(last_line);
         }
 
-        result
+        Ok(result)
     }
 }

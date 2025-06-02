@@ -1,8 +1,10 @@
 use crate::readers::{QueryReader, SpanReader, TomlReader, YamlReader};
+use anyhow::Result;
 
 /// Common trait for all reader types
 pub trait Reader {
-    fn read(&self) -> String;
+    /// Read the content and return a string result or an error
+    fn read(&self) -> Result<String>;
 }
 
 /// Accessor enum to handle different reader types
@@ -15,7 +17,8 @@ pub enum Accessor {
 }
 
 impl Accessor {
-    pub fn read(&self) -> String {
+    /// Read through the accessor, returning the content or an error
+    pub fn read(&self) -> Result<String> {
         match self {
             Accessor::Spans(reader) => reader.read(),
             Accessor::Toml(reader) => reader.read(),
@@ -33,7 +36,9 @@ pub struct Linker {
 }
 
 impl Linker {
-    pub fn check(&self) -> bool {
-        self.a.read() == self.b.read()
+    /// Compare the results of two readers, returning Ok(true) if equal,
+    /// Ok(false) if not equal, or an error if either reader fails.
+    pub fn check(&self) -> Result<bool> {
+        Ok(self.a.read()? == self.b.read()?)
     }
 }

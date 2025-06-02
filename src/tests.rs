@@ -23,16 +23,16 @@ mod tests {
             query: "specific content".to_string(),
         };
 
-        assert_eq!(query_reader.read(), "specific content");
+        assert_eq!(query_reader.read().unwrap(), "specific content");
 
-        // Test that a non-existent query causes a panic
+        // Test that a non-existent query returns an error
         let non_existent_query = QueryReader {
             file_path: file_path.clone(),
             query: "this text doesn't exist".to_string(),
         };
 
-        let result = std::panic::catch_unwind(|| non_existent_query.read());
-        assert!(result.is_err(), "Expected panic when query is not found");
+        let result = non_existent_query.read();
+        assert!(result.is_err(), "Expected error when query is not found");
 
         // Test with a query at the beginning of the file
         let beginning_query = QueryReader {
@@ -40,7 +40,7 @@ mod tests {
             query: "This is".to_string(),
         };
 
-        assert_eq!(beginning_query.read(), "This is");
+        assert_eq!(beginning_query.read().unwrap(), "This is");
 
         // Test with a query at the end of the file
         let end_query = QueryReader {
@@ -48,7 +48,7 @@ mod tests {
             query: "query reader".to_string(),
         };
 
-        assert_eq!(end_query.read(), "query reader");
+        assert_eq!(end_query.read().unwrap(), "query reader");
     }
     #[test]
     fn test_span_reader_multi_line() {
@@ -60,7 +60,7 @@ mod tests {
             start: Cursor { line: 2, column: 3 },
             end: Cursor { line: 3, column: 4 },
         };
-        let result = span.read();
+        let result = span.read().unwrap();
 
         assert_eq!(result, "ne 2\nline");
 
@@ -77,7 +77,7 @@ mod tests {
             start: Cursor { line: 2, column: 3 },
             end: Cursor { line: 2, column: 6 },
         };
-        let result = span.read();
+        let result = span.read().unwrap();
 
         assert_eq!(result, "ne 2");
 
@@ -107,7 +107,7 @@ mod tests {
             b: Accessor::Spans(span_b),
         };
 
-        assert!(linker.check());
+        assert!(linker.check().unwrap());
 
         fs::remove_file("test_linker_same.txt").unwrap();
     }
@@ -135,7 +135,7 @@ mod tests {
             b: Accessor::Spans(span_b),
         };
 
-        assert!(!linker.check());
+        assert!(!linker.check().unwrap());
 
         fs::remove_file("test_linker_diff.txt").unwrap();
     }
@@ -173,7 +173,7 @@ mod tests {
             b: Accessor::Spans(span_b),
         };
 
-        assert!(linker_same.check());
+        assert!(linker_same.check().unwrap());
 
         // Test case 2: Different files with different content in selected span
         let span_c = SpanReader {
@@ -199,7 +199,7 @@ mod tests {
             b: Accessor::Spans(span_d),
         };
 
-        assert!(!linker_different.check());
+        assert!(!linker_different.check().unwrap());
 
         // Clean up
         fs::remove_file("test_linker_file_a.txt").unwrap();
@@ -232,51 +232,51 @@ numbers = [1, 2, 3, 4, 5]
             file_path: toml_path.clone(),
             key_path: "section.key".to_string(),
         };
-        assert_eq!(reader.read(), "value");
+        assert_eq!(reader.read().unwrap(), "value");
 
         // Test reading numeric value
         let reader = TomlReader {
             file_path: toml_path.clone(),
             key_path: "section.number".to_string(),
         };
-        assert_eq!(reader.read(), "42");
+        assert_eq!(reader.read().unwrap(), "42");
 
         // Test reading boolean value
         let reader = TomlReader {
             file_path: toml_path.clone(),
             key_path: "section.flag".to_string(),
         };
-        assert_eq!(reader.read(), "true");
+        assert_eq!(reader.read().unwrap(), "true");
 
         // Test reading nested value
         let reader = TomlReader {
             file_path: toml_path.clone(),
             key_path: "nested.deep.key".to_string(),
         };
-        assert_eq!(reader.read(), "nested value");
+        assert_eq!(reader.read().unwrap(), "nested value");
 
         // Test reading array with index
         let reader = TomlReader {
             file_path: toml_path.clone(),
             key_path: "arrays.numbers[0]".to_string(),
         };
-        assert_eq!(reader.read(), "1");
+        assert_eq!(reader.read().unwrap(), "1");
 
         let reader = TomlReader {
             file_path: toml_path.clone(),
             key_path: "arrays.numbers[4]".to_string(),
         };
-        assert_eq!(reader.read(), "5");
+        assert_eq!(reader.read().unwrap(), "5");
 
-        // Test that accessing an array without an index causes a panic
+        // Test that accessing an array without an index returns an error
         let array_reader = TomlReader {
             file_path: toml_path,
             key_path: "arrays.numbers".to_string(),
         };
-        let result = std::panic::catch_unwind(|| array_reader.read());
+        let result = array_reader.read();
         assert!(
             result.is_err(),
-            "Expected panic when accessing array without index"
+            "Expected error when accessing array without index"
         );
 
         // Temporary file will be automatically cleaned up when it goes out of scope
@@ -324,7 +324,7 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Toml(toml_reader_b),
         };
 
-        assert!(linker_same.check());
+        assert!(linker_same.check().unwrap());
 
         // Test 2: Compare values that are different
         let toml_reader_c = TomlReader {
@@ -342,7 +342,7 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Toml(toml_reader_d),
         };
 
-        assert!(!linker_different.check());
+        assert!(!linker_different.check().unwrap());
 
         // Clean up
         fs::remove_file("test_toml_a.toml").unwrap();
@@ -364,78 +364,78 @@ numbers = [1, 2, 3, 4, 5]
             file_path: yaml_path.clone(),
             key_path: "server.host".to_string(),
         };
-        assert_eq!(string_reader.read(), "localhost");
+        assert_eq!(string_reader.read().unwrap(), "localhost");
 
         // Test reading numeric value
         let int_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "server.port".to_string(),
         };
-        assert_eq!(int_reader.read(), "8080");
+        assert_eq!(int_reader.read().unwrap(), "8080");
 
         // Test reading boolean value
         let bool_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "user.active".to_string(),
         };
-        assert_eq!(bool_reader.read(), "true");
+        assert_eq!(bool_reader.read().unwrap(), "true");
 
         // Test reading nested value
         let nested_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "user.personal.email".to_string(),
         };
-        assert_eq!(nested_reader.read(), "john@example.com");
+        assert_eq!(nested_reader.read().unwrap(), "john@example.com");
 
         // Test reading deeply nested value
         let deeply_nested_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "user.personal.contact.phone".to_string(),
         };
-        assert_eq!(deeply_nested_reader.read(), "+1-555-555-5555");
+        assert_eq!(deeply_nested_reader.read().unwrap(), "+1-555-555-5555");
 
         // Test array index access
         let array_index_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "user.scores[1]".to_string(),
         };
-        assert_eq!(array_index_reader.read(), "20");
+        assert_eq!(array_index_reader.read().unwrap(), "20");
 
         // Test array of strings index access
         let string_array_reader = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "arrays.strings[2]".to_string(),
         };
-        assert_eq!(string_array_reader.read(), "third");
+        assert_eq!(string_array_reader.read().unwrap(), "third");
 
         // Test mixed array index access
         let mixed_array_reader_int = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "arrays.mixed[0]".to_string(),
         };
-        assert_eq!(mixed_array_reader_int.read(), "42");
+        assert_eq!(mixed_array_reader_int.read().unwrap(), "42");
 
         let mixed_array_reader_bool = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "arrays.mixed[1]".to_string(),
         };
-        assert_eq!(mixed_array_reader_bool.read(), "true");
+        assert_eq!(mixed_array_reader_bool.read().unwrap(), "true");
 
         let mixed_array_reader_string = YamlReader {
             file_path: yaml_path.clone(),
             key_path: "arrays.mixed[2]".to_string(),
         };
-        assert_eq!(mixed_array_reader_string.read(), "text");
+        assert_eq!(mixed_array_reader_string.read().unwrap(), "text");
 
-        // Test that accessing an array without an index causes a panic
+        // Test that accessing an array without an index returns an error
         let array_reader = YamlReader {
             file_path: yaml_path,
             key_path: "user.scores".to_string(),
         };
-        let result = std::panic::catch_unwind(|| array_reader.read());
+        let result = array_reader.read();
         assert!(
             result.is_err(),
-            "Expected panic when accessing array without index"
+            "Expected error when accessing array without index"
         );
 
         // The temporary file will be automatically cleaned up when it goes out of scope
@@ -482,7 +482,7 @@ name = "John Doe"
         };
 
         assert!(
-            linker_same.check(),
+            linker_same.check().unwrap(),
             "Same values across formats should match"
         );
 
@@ -503,7 +503,7 @@ name = "John Doe"
         };
 
         assert!(
-            !linker_different.check(),
+            !linker_different.check().unwrap(),
             "Different values should not match"
         );
 
@@ -523,7 +523,7 @@ name = "John Doe"
             b: Accessor::Toml(toml_reader_num),
         };
 
-        assert!(linker_num.check(), "Same numeric values should match");
+        assert!(linker_num.check().unwrap(), "Same numeric values should match");
 
         // Temporary files will be automatically cleaned up when they go out of scope
     }
@@ -594,7 +594,7 @@ numbers = [1, 2, 3, 4, 5]
         };
 
         assert!(
-            linker_string.check(),
+            linker_string.check().unwrap(),
             "String value comparison should match"
         );
 
@@ -616,7 +616,7 @@ numbers = [1, 2, 3, 4, 5]
         };
 
         assert!(
-            linker_number.check(),
+            linker_number.check().unwrap(),
             "Numeric value comparison should match"
         );
 
@@ -637,7 +637,7 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Spans(span_reader_bool),
         };
 
-        assert!(linker_bool.check(), "Boolean value comparison should match");
+        assert!(linker_bool.check().unwrap(), "Boolean value comparison should match");
 
         // Test 4: Compare array value with index
         let toml_reader_array = TomlReader {
@@ -656,7 +656,7 @@ numbers = [1, 2, 3, 4, 5]
             b: Accessor::Spans(span_reader_array),
         };
 
-        assert!(linker_array.check(), "Array value comparison should match");
+        assert!(linker_array.check().unwrap(), "Array value comparison should match");
 
         // Test 5: Compare nested value
         let toml_reader_nested = TomlReader {
@@ -679,7 +679,7 @@ numbers = [1, 2, 3, 4, 5]
         };
 
         assert!(
-            linker_nested.check(),
+            linker_nested.check().unwrap(),
             "Nested value comparison should match"
         );
 
@@ -701,7 +701,7 @@ numbers = [1, 2, 3, 4, 5]
         };
 
         assert!(
-            !linker_non_match.check(),
+            !linker_non_match.check().unwrap(),
             "Different values should not match"
         );
 
@@ -754,7 +754,7 @@ scores = [10, 20, 30]
         };
 
         assert!(
-            linker_string.check(),
+            linker_string.check().unwrap(),
             "String value comparison should match"
         );
 
@@ -775,7 +775,7 @@ scores = [10, 20, 30]
         };
 
         assert!(
-            linker_number.check(),
+            linker_number.check().unwrap(),
             "Numeric value comparison should match"
         );
 
@@ -795,7 +795,7 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader_array),
         };
 
-        assert!(linker_array.check(), "Array value comparison should match");
+        assert!(linker_array.check().unwrap(), "Array value comparison should match");
 
         // Test 4: Create a YAML file with different values
         let test_yaml_different = "---\nserver:\n  host: different-host\n  port: 9090\n";
@@ -817,7 +817,7 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader_diff),
         };
 
-        assert!(!linker_diff.check(), "Different values should not match");
+        assert!(!linker_diff.check().unwrap(), "Different values should not match");
 
         // Temporary files will be automatically cleaned up when they go out of scope
     }
@@ -858,7 +858,7 @@ scores = [10, 20, 30]
             b: Accessor::Yaml(yaml_reader),
         };
 
-        assert!(linker.check(), "Matching values should compare equal");
+        assert!(linker.check().unwrap(), "Matching values should compare equal");
 
         // Test 2: Create a span with different content
         fs::write(&span_diff_path, "different").unwrap();
@@ -880,7 +880,7 @@ scores = [10, 20, 30]
         };
 
         assert!(
-            !linker_diff.check(),
+            !linker_diff.check().unwrap(),
             "Different values should not compare equal"
         );
 
@@ -940,7 +940,7 @@ debug = true
         };
 
         assert!(
-            linker.check(),
+            linker.check().unwrap(),
             "Matching query and TOML value should compare equal"
         );
 
@@ -961,7 +961,7 @@ debug = true
         };
 
         assert!(
-            linker.check(),
+            linker.check().unwrap(),
             "Matching query and YAML value should compare equal"
         );
 
@@ -982,7 +982,7 @@ debug = true
         };
 
         assert!(
-            !linker.check(),
+            !linker.check().unwrap(),
             "Non-matching query and TOML value should not compare equal"
         );
 
@@ -1065,7 +1065,7 @@ last_updated = "2025-05-01"
         };
 
         assert!(
-            linker_api.check(),
+            linker_api.check().unwrap(),
             "API production URL should match between text and config"
         );
 
@@ -1086,7 +1086,7 @@ last_updated = "2025-05-01"
         };
 
         assert!(
-            linker_db.check(),
+            linker_db.check().unwrap(),
             "Database connection string should match between text and config"
         );
 
@@ -1107,7 +1107,7 @@ last_updated = "2025-05-01"
         };
 
         assert!(
-            linker_timeout.check(),
+            linker_timeout.check().unwrap(),
             "Timeout value should match between text and config"
         );
 
@@ -1128,7 +1128,7 @@ last_updated = "2025-05-01"
         };
 
         assert!(
-            linker_debug.check(),
+            linker_debug.check().unwrap(),
             "Debug mode value should match between text and config"
         );
 
@@ -1149,7 +1149,7 @@ last_updated = "2025-05-01"
         };
 
         assert!(
-            !linker_wrong.check(),
+            !linker_wrong.check().unwrap(),
             "Mismatched values should not compare equal"
         );
     }
@@ -1157,7 +1157,7 @@ last_updated = "2025-05-01"
     #[test]
     fn test_expand_path_with_tilde() {
         if let Some(home_dir) = dirs::home_dir() {
-            let result = expand_path("~/test/path").unwrap();
+            let result = expand_path("~/test/path");
             let expected = home_dir.join("test/path").to_string_lossy().into_owned();
             assert_eq!(result, expected);
         }
@@ -1166,11 +1166,11 @@ last_updated = "2025-05-01"
     #[test]
     fn test_expand_path_without_tilde() {
         let path = "/absolute/path/test";
-        let result = expand_path(path).unwrap();
+        let result = expand_path(path);
         assert_eq!(result, path);
 
         let relative_path = "./relative/path";
-        let result = expand_path(relative_path).unwrap();
+        let result = expand_path(relative_path);
         assert_eq!(result, relative_path);
     }
 }

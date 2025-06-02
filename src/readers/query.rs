@@ -1,4 +1,5 @@
 use crate::readers::Reader;
+use anyhow::{Context, Result};
 use std::fs;
 
 /// Reader for finding specific text in a file
@@ -9,21 +10,14 @@ pub struct QueryReader {
 }
 
 impl Reader for QueryReader {
-    fn read(&self) -> String {
-        // Read the file content
-        let content = fs::read_to_string(&self.file_path).unwrap_or_else(|e| {
-            panic!("Failed to read file {}: {}", self.file_path, e);
-        });
+    fn read(&self) -> Result<String> {
+        let content = fs::read_to_string(&self.file_path)
+            .with_context(|| format!("Failed to read file: {}", self.file_path))?;
 
-        // Search for the query string
         if content.contains(&self.query) {
-            // Return the query string itself
-            self.query.clone()
+            Ok(self.query.clone())
         } else {
-            panic!(
-                "Query '{}' not found in file {}",
-                self.query, self.file_path
-            );
+            anyhow::bail!("Query '{}' not found in file: {}", self.query, self.file_path)
         }
     }
 }
