@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use crate::readers::span::Cursor;
     use crate::{
         Accessor, Linker, QueryReader, Reader, SpanReader, TomlReader, YamlReader, expand_path,

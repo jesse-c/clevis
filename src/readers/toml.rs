@@ -51,7 +51,7 @@ impl Reader for TomlReader {
                                     current_value = &arr[index];
                                 } else {
                                     return Err(AppError::KeyNotFound {
-                                        key_path: format!("{}[{}]", key_name, index),
+                                        key_path: format!("{key_name}[{index}]"),
                                         file_path: self.file_path.clone(),
                                     });
                                 }
@@ -78,8 +78,7 @@ impl Reader for TomlReader {
                         file_type: "TOML".to_string(),
                         path: self.file_path.clone(),
                         source: anyhow::Error::msg(format!(
-                            "Malformed array index notation '{}'",
-                            part
+                            "Malformed array index notation '{part}'"
                         )),
                     });
                 }

@@ -28,26 +28,26 @@ impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppError::FileOperation { path, source } => {
-                write!(f, "File operation failed: {} ({})", path, source)
+                write!(f, "File operation failed: {path} ({source})")
             }
             AppError::Parse {
                 file_type,
                 path,
                 source,
             } => {
-                write!(f, "Parse error in {}: {} ({})", file_type, path, source)
+                write!(f, "Parse error in {file_type}: {path} ({source})")
             }
             AppError::KeyNotFound {
                 key_path,
                 file_path,
             } => {
-                write!(f, "Key '{}' not found in {}", key_path, file_path)
+                write!(f, "Key '{key_path}' not found in {file_path}")
             }
             AppError::QueryNotFound { query, file_path } => {
-                write!(f, "Query '{}' not found in {}", query, file_path)
+                write!(f, "Query '{query}' not found in {file_path}")
             }
             AppError::ConfigError { message } => {
-                write!(f, "Configuration error: {}", message)
+                write!(f, "Configuration error: {message}")
             }
         }
     }
