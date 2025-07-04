@@ -19,7 +19,7 @@ impl Reader for YamlReader {
         })?;
 
         let content_with_marker = if !content.trim_start().starts_with("---") {
-            format!("---\n{}", content)
+            format!("---\n{content}")
         } else {
             content
         };
@@ -60,15 +60,15 @@ impl Reader for YamlReader {
                     if let Some(arr) = array_value.as_sequence() {
                         let index = index_str.parse::<usize>().with_context(|| {
                             format!(
-                                "Invalid array index '{}' in YAML file: {}",
-                                index_str, self.file_path
+                                "Invalid array index '{index_str}' in YAML file: {}",
+                                self.file_path
                             )
                         })?;
                         if index < arr.len() {
                             current_value = &arr[index];
                         } else {
                             return Err(AppError::KeyNotFound {
-                                key_path: format!("{}[{}]", key_name, index),
+                                key_path: format!("{key_name}[{index}]"),
                                 file_path: self.file_path.clone(),
                             });
                         }
@@ -83,8 +83,7 @@ impl Reader for YamlReader {
                         file_type: "YAML".to_string(),
                         path: self.file_path.clone(),
                         source: anyhow::Error::msg(format!(
-                            "Malformed array index notation '{}'",
-                            part
+                            "Malformed array index notation '{part}'"
                         )),
                     });
                 }
@@ -117,7 +116,7 @@ impl Reader for YamlReader {
         } else if current_value.is_null() {
             Ok("null".to_string())
         } else {
-            Ok(format!("{:?}", current_value))
+            Ok(format!("{current_value:?}"))
         }
     }
 }
