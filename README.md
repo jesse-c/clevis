@@ -2,7 +2,7 @@
 
 A CLI tool for validating consistency between different parts of your codebase by comparing values across multiple file formats and locations.
 
-Clevis helps you maintain consistency in your projects by "linking" values that should match across different files. Instead of manually checking that version numbers, configuration values, or other data stays synchronized, Clevis automates these checks to catch inconsistencies early.
+Clevis is a tool that helps maintain consistency across your codebase by checking that values in different files match. It supports reading from TOML files, YAML files, and specific text spans, making it perfect for ensuring configuration values, version numbers, or other important data stays synchronized.
 
 ## Features
 

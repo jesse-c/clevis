@@ -1,0 +1,94 @@
+<Layouts.flash_group flash={@flash} />
+<div>
+  <h1 class="text-3xl font-bold mb-6">Supported Readers</h1>
+
+  <p class="mb-8">
+    Readers define how Clevis extracts a value from a file. Each side of a link specifies a
+    reader <code>kind</code> along with the parameters needed to locate the value.
+  </p>
+
+  <div class="space-y-8">
+    <section class="card bg-base-200 p-6">
+      <h2 class="text-2xl font-semibold mb-2"><code>toml</code></h2>
+      <p class="mb-4">Reads a value from a TOML file by key path.</p>
+      <h3 class="font-semibold mb-2">Parameters</h3>
+      <ul class="list-disc list-inside space-y-1 mb-4">
+        <li><code>file_path</code> — path to the TOML file</li>
+        <li>
+          <code>key_path</code>
+          — dot-separated key path (e.g. <code>package.version</code>); supports array indexing with
+          <code>[n]</code>
+        </li>
+      </ul>
+      <h3 class="font-semibold mb-2">Example</h3>
+      <pre class="bg-base-300 p-4 rounded overflow-x-auto">
+[links.my_link.a]
+kind = "toml"
+file_path = "Cargo.toml"
+key_path = "package.version"</pre>
+    </section>
+
+    <section class="card bg-base-200 p-6">
+      <h2 class="text-2xl font-semibold mb-2"><code>yaml</code></h2>
+      <p class="mb-4">Reads a value from a YAML file by key path.</p>
+      <h3 class="font-semibold mb-2">Parameters</h3>
+      <ul class="list-disc list-inside space-y-1 mb-4">
+        <li><code>file_path</code> — path to the YAML file</li>
+        <li>
+          <code>key_path</code>
+          — dot-separated key path; supports array indexing with <code>[n]</code>
+        </li>
+      </ul>
+      <h3 class="font-semibold mb-2">Example</h3>
+      <pre class="bg-base-300 p-4 rounded overflow-x-auto">
+[links.my_link.b]
+kind = "yaml"
+file_path = ".github/workflows/ci.yml"
+key_path = "jobs.build.runs-on"</pre>
+    </section>
+
+    <section class="card bg-base-200 p-6">
+      <h2 class="text-2xl font-semibold mb-2"><code>span</code></h2>
+      <p class="mb-4">
+        Reads a specific character span from any text file using line and column positions.
+      </p>
+      <h3 class="font-semibold mb-2">Parameters</h3>
+      <ul class="list-disc list-inside space-y-1 mb-4">
+        <li><code>file_path</code> — path to the file</li>
+        <li><code>start.line</code> / <code>start.column</code> — 1-indexed start position</li>
+        <li>
+          <code>end.line</code> / <code>end.column</code> — 1-indexed end position (inclusive)
+        </li>
+      </ul>
+      <h3 class="font-semibold mb-2">Example</h3>
+      <pre class="bg-base-300 p-4 rounded overflow-x-auto">
+[links.my_link.b]
+kind = "span"
+file_path = "README.md"
+[links.my_link.b.start]
+line = 25
+column = 12
+[links.my_link.b.end]
+line = 25
+column = 17</pre>
+    </section>
+
+    <section class="card bg-base-200 p-6">
+      <h2 class="text-2xl font-semibold mb-2"><code>query</code></h2>
+      <p class="mb-4">
+        Searches for a literal string anywhere in a file. Succeeds if the string is present, fails if it is absent.
+      </p>
+      <h3 class="font-semibold mb-2">Parameters</h3>
+      <ul class="list-disc list-inside space-y-1 mb-4">
+        <li><code>file_path</code> — path to the file</li>
+        <li><code>query</code> — the literal string to search for</li>
+      </ul>
+      <h3 class="font-semibold mb-2">Example</h3>
+      <pre class="bg-base-300 p-4 rounded overflow-x-auto">
+[links.my_link.a]
+kind = "query"
+file_path = "Makefile"
+query = "install"</pre>
+    </section>
+  </div>
+</div>

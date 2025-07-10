@@ -17,3 +17,43 @@ column = 14
 [links.reader.b.end]
 line = 39
 column = 34
+
+[links.multi_format_toml.a]
+kind = "span"
+file_path = "site/lib/site_web/controllers/page_html/features.html.heex"
+[links.multi_format_toml.a.start]
+line = 54
+column = 13
+[links.multi_format_toml.a.end]
+line = 54
+column = 22
+
+[links.multi_format_toml.b]
+kind = "span"
+file_path = "src/readers/toml.rs"
+[links.multi_format_toml.b.start]
+line = 6
+column = 16
+[links.multi_format_toml.b.end]
+line = 6
+column = 25
+
+[links.multi_format_yaml.a]
+kind = "span"
+file_path = "site/lib/site_web/controllers/page_html/features.html.heex"
+[links.multi_format_yaml.a.start]
+line = 55
+column = 13
+[links.multi_format_yaml.a.end]
+line = 55
+column = 22
+
+[links.multi_format_yaml.b]
+kind = "span"
+file_path = "src/readers/yaml.rs"
+[links.multi_format_yaml.b.start]
+line = 7
+column = 16
+[links.multi_format_yaml.b.end]
+line = 7
+column = 25
