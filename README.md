@@ -2,6 +2,8 @@
 
 The big linker.
 
+Generation, vs linking, is preferable. If you can't generate, then link. Linking infers having manually created something, and manual creation is generally more work intensive and error prone, as opposed to running generation—in the areas that this project covers, as opposed to things like code generation. 
+
 ## Installation
 
 Download a GitHub release or build it yourself.
