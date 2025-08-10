@@ -68,7 +68,7 @@ impl Config {
         })?;
 
         // Parse the TOML
-        let parsed: toml::Value = content.parse().map_err(|e| AppError::Parse {
+        let parsed: toml::Table = content.parse().map_err(|e| AppError::Parse {
             file_type: "TOML".to_string(),
             path: path.to_string(),
             source: anyhow::Error::from(e),
@@ -98,7 +98,7 @@ impl Config {
     /// # Returns
     ///
     /// A `Result` containing the parsed `Config` or an error
-    fn parse_config(value: toml::Value, config_dir: &Path) -> Result<Self> {
+    fn parse_config(value: toml::Table, config_dir: &Path) -> Result<Self> {
         let mut config = Config {
             links: HashMap::new(),
         };

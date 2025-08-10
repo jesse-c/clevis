@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::readers::Reader;
 use std::fs;
-use toml::Value;
+use toml::{Table, Value};
 
 /// Reader for TOML files
 #[derive(Clone, Debug)]
@@ -17,14 +17,15 @@ impl Reader for TomlReader {
             source: e,
         })?;
 
-        let parsed: Value = content.parse().map_err(|e| AppError::Parse {
+        let parsed: Table = content.parse().map_err(|e| AppError::Parse {
             file_type: "TOML".to_string(),
             path: self.file_path.clone(),
             source: anyhow::Error::from(e),
         })?;
         let path_parts: Vec<&str> = self.key_path.split('.').collect();
 
-        let mut current_value = &parsed;
+        let parsed_value = Value::Table(parsed);
+        let mut current_value = &parsed_value;
         let mut current_path = String::new();
 
         for part in path_parts {
