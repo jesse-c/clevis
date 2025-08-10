@@ -157,16 +157,16 @@ fn run() -> anyhow::Result<()> {
                                 println!("  ✓ '{link_key}': Values match");
 
                                 // Show the values if verbose mode is enabled
-                                if cli.verbose {
-                                    if let Ok(linker) = config.get_linker(link_key) {
-                                        match (linker.a.read(), linker.b.read()) {
-                                            (Ok(a_value), Ok(b_value)) => {
-                                                println!("    Value A: '{a_value}'");
-                                                println!("    Value B: '{b_value}'");
-                                            }
-                                            (Err(e), _) => println!("    Error reading A: {e}"),
-                                            (_, Err(e)) => println!("    Error reading B: {e}"),
+                                if cli.verbose
+                                    && let Ok(linker) = config.get_linker(link_key)
+                                {
+                                    match (linker.a.read(), linker.b.read()) {
+                                        (Ok(a_value), Ok(b_value)) => {
+                                            println!("    Value A: '{a_value}'");
+                                            println!("    Value B: '{b_value}'");
                                         }
+                                        (Err(e), _) => println!("    Error reading A: {e}"),
+                                        (_, Err(e)) => println!("    Error reading B: {e}"),
                                     }
                                 }
                             } else {
@@ -213,16 +213,16 @@ fn run() -> anyhow::Result<()> {
                 for link_key in config.links.keys() {
                     println!("  {link_key}");
 
-                    if cli.verbose {
-                        if let Ok(linker) = config.get_linker(link_key) {
-                            match (linker.a.read(), linker.b.read()) {
-                                (Ok(a_value), Ok(b_value)) => {
-                                    println!("    Value A: '{a_value}'");
-                                    println!("    Value B: '{b_value}'");
-                                }
-                                (Err(e), _) => println!("    Error reading A: {e}"),
-                                (_, Err(e)) => println!("    Error reading B: {e}"),
+                    if cli.verbose
+                        && let Ok(linker) = config.get_linker(link_key)
+                    {
+                        match (linker.a.read(), linker.b.read()) {
+                            (Ok(a_value), Ok(b_value)) => {
+                                println!("    Value A: '{a_value}'");
+                                println!("    Value B: '{b_value}'");
                             }
+                            (Err(e), _) => println!("    Error reading A: {e}"),
+                            (_, Err(e)) => println!("    Error reading B: {e}"),
                         }
                     }
                 }
