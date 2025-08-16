@@ -9,4 +9,4 @@ clap = { version = "4.5.43", features = ["derive"] }
 dirs = "6.0.0"
 saphyr = "0.0.6"
 tempfile = "3.20.0"
-toml = "0.9.4"
+toml = "0.9.5"
