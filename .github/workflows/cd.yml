@@ -83,12 +83,12 @@ jobs:
           fetch-depth: 0  # This fetches all history and tags
 
       - name: Check conventional commits
-        uses: cocogitto/cocogitto-action@v3
+        uses: cocogitto/cocogitto-action@v4
 
       - name: Bump version
         id: bump
         if: ${{ github.event.inputs.version == '' || github.event.inputs.version == null }}
-        uses: cocogitto/cocogitto-action@v3
+        uses: cocogitto/cocogitto-action@v4
         with:
           release: true
           git-user: "${{ github.actor }}"
