@@ -1,7 +1,51 @@
 <Layouts.flash_group flash={@flash} />
-<div class="mt-10 flex justify-between items-center">
-  <Layouts.theme_toggle />
-</div>
+<nav class="navbar border-b border-black dark:border-white">
+  <div class="navbar-start">
+    <h1 class="text-xl font-bold">Clevis</h1>
+  </div>
+  <div class="navbar-end">
+    <Layouts.theme_toggle />
+  </div>
+</nav>
 <div>
-  <h1>Clevis</h1>
+  <h1 class="text-xl font-bold">Introduction</h1>
+  <p>
+    Clevis is a tool that helps maintain consistency across your codebase by checking that values in different files match. It supports reading from TOML files, YAML files, and specific text spans, making it perfect for ensuring configuration values, version numbers, or other important data stays synchronised.
+  </p>
+  <h1 class="text-xl font-bold">A real problem as an example</h1>
+  <p>Think of every <pre>README.md</pre> you've ever seen, that has something like this:</p>
+  <pre>
+    # Setup
+
+    ..
+
+    Run `make install`.
+
+    ...
+  </pre>
+  <p>Later on you migrate from a Makefile to a Justfile. Someone forgets to update the <pre>README.md</pre>. Someone who didn't review the pull request, or is new to the project, comes along. They have a moment of frustration!</p>
+  <h1 class="text-xl font-bold">Why this is happens</h1>
+  <p>Ideally someone remembers, but, if something is manual, then it <em>will</em> be forgotten at some point. Another ideal is that you generate the README.md, and catch it in the process. Sometimes you can't reasonably do generation.</p>
+  <h1 class="text-xl font-bold">How Clevis solves this</h1>
+  <p>You <em>link</em> the 2 things together, and get told when they're misaligned.</p>
+  <pre>
+    [links.readme_version.a]
+    kind = "toml"
+    file_path = "Cargo.toml"
+    key_path = "package.version"
+    [links.readme_version.b]
+    kind = "span"
+    file_path = "README.md"
+    [links.readme_version.b.start]
+    line = 25
+    column = 12
+    [links.readme_version.b.end]
+    line = 25
+    column = 17
+  </pre>
+  <p>Next time for the pull request, you'll get a warning, or error, in your CI.</p>
+  <h1 class="text-xl font-bold">Features</h1>
+  <ul>
+    <li></li>
+  </ul>
 </div>
