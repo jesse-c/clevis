@@ -113,13 +113,13 @@ jobs:
           cog changelog --at $VERSION -t full_hash > GITHUB_CHANGELOG.md
 
       - name: Download Linux artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: clevis-linux
           path: linux/
 
       - name: Download macOS artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: clevis-macos
           path: macos/
