@@ -84,13 +84,16 @@ jobs:
 
       - name: Check conventional commits
         uses: cocogitto/cocogitto-action@v4
+        with:
+          command: check
 
       - name: Bump version
         id: bump
         if: ${{ github.event.inputs.version == '' || github.event.inputs.version == null }}
         uses: cocogitto/cocogitto-action@v4
         with:
-          release: true
+          command: bump
+          args: --auto
           git-user: "${{ github.actor }}"
           git-user-email: "${{ github.actor }}@users.noreply.github.com"
 
@@ -108,9 +111,11 @@ jobs:
           fi
 
       - name: Generate changelog
-        run: |
-          VERSION="${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}"
-          cog changelog --at $VERSION -t full_hash > GITHUB_CHANGELOG.md
+        id: changelog
+        uses: cocogitto/cocogitto-action@v4
+        with:
+          command: changelog
+          args: --at ${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v8
@@ -135,7 +140,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: ${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}
-          body_path: GITHUB_CHANGELOG.md
+          body: ${{ steps.changelog.outputs.stdout }}
           tag_name: ${{ steps.bump.outputs.version || steps.manual_version.outputs.version }}
           files: |
             clevis-linux-x86_64
