@@ -92,3 +92,9 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy -- -D warnings
+
+      - uses: jesse-c/clevis-action@v0.2.0
+        name: Run Clevis
+        with:
+          config-path: './clevis.toml'
+          command: 'check'

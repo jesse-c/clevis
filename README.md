@@ -26,6 +26,15 @@ Generation, vs linking, is preferable. If you can't generate, then link. Linking
 
 Download a GitHub release or build it yourself.
 
+### Build
+
+1. `cargo build --release`
+2. `cp target/release/clevis ~/.local/usr/bin`
+
+Or:
+
+1 `cargo install --locked --path .`
+
 ## Usage
 
 ### Local
