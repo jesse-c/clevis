@@ -1,0 +1,19 @@
+[links.reader.a]
+kind = "span"
+file_path = "README.md"
+[links.reader.a.start]
+line = 31
+column = 5
+[links.reader.a.end]
+line = 31
+column = 25
+
+[links.reader.b]
+kind = "span"
+file_path = ".github/workflows/cd.yml"
+[links.reader.b.start]
+line = 39
+column = 14
+[links.reader.b.end]
+line = 39
+column = 34
