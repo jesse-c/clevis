@@ -13,6 +13,95 @@ Clevis helps you maintain consistency in your projects by "linking" values that 
 - **Relative path support**: Use paths relative to your configuration file
 - **CI/CD integration**: Available as a GitHub Action for automated checks
 
+## Configuration
+
+Create a `clevis.toml` file in your project root. Each link defines two accessors (`a` and `b`) whose extracted values must match.
+
+```toml
+[links.<link_name>.a]
+kind = "<reader>"
+file_path = "<path>"
+# reader-specific fields
+
+[links.<link_name>.b]
+kind = "<reader>"
+file_path = "<path>"
+# reader-specific fields
+```
+
+File paths can be absolute or relative to the `clevis.toml` file.
+
+### Readers
+
+#### TOML
+
+Extracts a value from a TOML file using a dot-separated key path. Supports array indexing (e.g., `items[0].name`).
+
+```toml
+[links.version.a]
+kind = "toml"
+file_path = "Cargo.toml"
+key_path = "package.version"
+```
+
+#### YAML
+
+Extracts a value from a YAML file using a dot-separated key path. Supports array indexing (e.g., `spec.containers[0].image`).
+
+```toml
+[links.version.b]
+kind = "yaml"
+file_path = "Chart.yaml"
+key_path = "appVersion"
+```
+
+#### Span
+
+Extracts a slice of text from any file by specifying start and end positions (1-indexed line and column numbers).
+
+```toml
+[links.version.a]
+kind = "span"
+file_path = "README.md"
+[links.version.a.start]
+line = 5
+column = 10
+[links.version.a.end]
+line = 5
+column = 15
+```
+
+#### Query
+
+Checks that an exact string exists in a file and returns it. Useful for verifying a value appears in an unstructured file.
+
+```toml
+[links.base_image.a]
+kind = "query"
+file_path = "Dockerfile"
+query = "FROM ubuntu:24.04"
+```
+
+### Example
+
+```toml
+# Ensure Cargo.toml and the GitHub Action workflow reference the same version
+[links.cargo_version.a]
+kind = "toml"
+file_path = "Cargo.toml"
+key_path = "package.version"
+
+[links.cargo_version.b]
+kind = "span"
+file_path = ".github/workflows/release.yml"
+[links.cargo_version.b.start]
+line = 12
+column = 14
+[links.cargo_version.b.end]
+line = 12
+column = 19
+```
+
 ## Supported Readers
 
 - **TOML**: Read values using key paths (e.g., `package.version`)
